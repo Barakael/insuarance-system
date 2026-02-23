@@ -1,21 +1,19 @@
 from database.session import SessionLocal
-from models.policy import Policy
+from models.user import User
 
-class PolicyService:
-    def __init__(self):
-        self.__session = SessionLocal()
-
-    def create_policy(self, policy):
-        self.__session.add(policy)
-        self.__session.commit()
-        print("Policy created successfully!")
-
-    def get_policy(self, policy_id):
-        return self.__session.query(Policy).filter_by(policy_id=policy_id).first()
-
-    def update_policy(self, policy):
-        self.__session.commit()
-        print("Policy updated successfully!")
-
-    def close_session(self):
-        self.__session.close()
+class UserService:
+    def authenticate_user(self, username, password):
+        # We open a new database session
+        db = SessionLocal()
+        try:
+            # Look for the user in the database
+            user = db.query(User).filter(
+                User.username == username, 
+                User.password == password
+            ).first()
+            return user
+        except Exception as e:
+            print(f"Database error during login: {e}")
+            return None
+        finally:
+            db.close()
