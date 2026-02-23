@@ -1,5 +1,5 @@
 import tkinter as tk
-from .base_page import BasePage
+from .base_page import BasePage  # Essential Import
 
 class DashboardPage(BasePage):
     def __init__(self, parent, user):
@@ -17,7 +17,6 @@ class DashboardPage(BasePage):
         stats_container = tk.Frame(self.frame, bg="#ffffff")
         stats_container.pack(fill="x", padx=40)
 
-        # Encapsulating Stat Cards
         self.create_stat_card(stats_container, "Active Policies", "1,284", "#1a237e", 0)
         self.create_stat_card(stats_container, "Pending Claims", "42", "#9dc183", 1)
         self.create_stat_card(stats_container, "Total Premiums", "$4.2M", "#1a237e", 2)
