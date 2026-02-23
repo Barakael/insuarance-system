@@ -1,16 +1,15 @@
 import tkinter as tk
 from .base_page import BasePage
-from database.session import SessionLocal
-from models.user import User
+# Note: UsersPage is imported inside show_page to prevent circular import issues
 
 class MainWindow(BasePage):
     def __init__(self, root, user):
         super().__init__(root, user)
 
-        # === THEME SYSTEM ===
+        # === THEME SYSTEM (Navy & Sage) ===
         self.NAVY = "#1a237e"
-        self.NAVY_LIGHT = "#283593"
-        self.SAGE = "#9dc183"
+        self.NAVY_HOVER = "#0d1442"  # Darker Navy for hover contrast
+        self.SAGE = "#9dc183"        # Soft Green for accents
         self.WHITE = "#ffffff"
         self.LIGHT_GRAY = "#f8f9fa"
         self.TEXT_DARK = "#1f2937"
@@ -19,14 +18,13 @@ class MainWindow(BasePage):
         self.root.geometry("1200x850")
         self.root.configure(bg=self.LIGHT_GRAY)
 
-        # State management for auto-refresh
-        self.refresh_id = None
         self.nav_buttons = {}
+        self.current_page_obj = None 
         
         self.build_layout()
 
     def build_layout(self):
-        # ===== SIDEBAR =====
+        # ===== SIDEBAR (Solid Navy) =====
         self.sidebar = tk.Frame(self.root, bg=self.NAVY, width=260)
         self.sidebar.pack(side="left", fill="y")
         self.sidebar.pack_propagate(False)
@@ -38,7 +36,7 @@ class MainWindow(BasePage):
             font=("Helvetica", 18, "bold"), pady=40
         ).pack()
 
-        # Navigation Menu Items
+        # Navigation
         menu_items = [
             ("Dashboard", "📊"),
             ("Users", "👥"),
@@ -73,11 +71,10 @@ class MainWindow(BasePage):
             command=self.logout, cursor="hand2"
         ).pack(side="right", padx=40)
 
-        # The Stage where pages are rendered
+        # Dynamic Content Card
         self.content_stage = tk.Frame(self.main_container, bg=self.LIGHT_GRAY)
         self.content_stage.pack(expand=True, fill="both", padx=40, pady=40)
 
-        # Default start page
         self.show_page("Dashboard")
 
     def create_nav_item(self, text, icon):
@@ -90,7 +87,7 @@ class MainWindow(BasePage):
         )
         btn.pack(fill="x")
         
-        btn.bind("<Enter>", lambda e: btn.config(bg=self.NAVY_LIGHT))
+        btn.bind("<Enter>", lambda e: btn.config(bg=self.NAVY_HOVER))
         btn.bind("<Leave>", lambda e: self.update_nav_selection(text))
         self.nav_buttons[text] = btn
 
@@ -102,86 +99,33 @@ class MainWindow(BasePage):
                 btn.config(bg=self.NAVY, fg=self.WHITE)
 
     def show_page(self, page_name):
-        # 1. Kill any existing refresh loop to save resources
-        if self.refresh_id:
-            self.root.after_cancel(self.refresh_id)
-            self.refresh_id = None
+        # 1. Stop any active auto-refresh timer from the current page
+        if self.current_page_obj and hasattr(self.current_page_obj, 'refresh_id'):
+            if self.current_page_obj.refresh_id:
+                self.root.after_cancel(self.current_page_obj.refresh_id)
 
         self.title_label.config(text=page_name)
         self.update_nav_selection(page_name)
 
-        # 2. Clear content stage
+        # 2. Clear current content
         for widget in self.content_stage.winfo_children():
             widget.destroy()
 
-        # 3. Create the Page Card
-        self.page_card = tk.Frame(
-            self.content_stage, bg=self.WHITE,
-            highlightthickness=1, highlightbackground="#e0e0e0"
-        )
-        self.page_card.pack(expand=True, fill="both")
-
-        # 4. Route to specific page logic
-        if page_name == "Users":
-            self.setup_users_view()
-        else:
-            tk.Label(self.page_card, text=f"{page_name} coming soon...", 
-                     bg=self.WHITE, font=("Helvetica", 12)).pack(expand=True)
-
-    # ================= REFRESH LOGIC =================
-
-    def setup_users_view(self):
-        """Builds the table structure and starts the loop"""
-        toolbar = tk.Frame(self.page_card, bg=self.WHITE, pady=20, padx=20)
-        toolbar.pack(fill="x")
-
-        tk.Label(toolbar, text="User Registry", font=("Helvetica", 14, "bold"),
-                 bg=self.WHITE, fg=self.NAVY).pack(side="left")
-
-        # Visual indicator that the page is 'Live'
-        self.status_indicator = tk.Label(toolbar, text="● Syncing...", 
-                                        fg=self.SAGE, bg=self.WHITE, font=("Helvetica", 9))
-        self.status_indicator.pack(side="left", padx=20)
-
-        # Frame where the actual data rows go
-        self.table_body = tk.Frame(self.page_card, bg=self.WHITE)
-        self.table_body.pack(fill="both", expand=True, padx=20)
-
-        # Start the recursive refresh loop
-        self.refresh_users_loop()
-
-    def refresh_users_loop(self):
-        """Polls DB and updates the UI every 5 seconds"""
-        # Clear rows
-        for widget in self.table_body.winfo_children():
-            widget.destroy()
-
-        # Re-build Header
-        header = tk.Frame(self.table_body, bg=self.LIGHT_GRAY)
-        header.pack(fill="x")
-        for col in ["ID", "Username", "Role", "Status"]:
-            tk.Label(header, text=col, font=("Helvetica", 10, "bold"), 
-                     bg=self.LIGHT_GRAY, width=15).pack(side="left", pady=10)
-
-        # Fetch Data
-        db = SessionLocal()
-        try:
-            users = db.query(User).all()
-            for user in users:
-                row = tk.Frame(self.table_body, bg=self.WHITE)
-                row.pack(fill="x", pady=2)
-                tk.Label(row, text=user.id, bg=self.WHITE, width=15).pack(side="left")
-                tk.Label(row, text=user.username, bg=self.WHITE, width=15).pack(side="left")
-                tk.Label(row, text=user.role, bg=self.WHITE, width=15).pack(side="left")
-                tk.Label(row, text="Active", fg="green", bg=self.WHITE, width=15).pack(side="left")
-        finally:
-            db.close()
-
-        # Schedule next run in 5000ms (5 seconds)
-        self.refresh_id = self.root.after(5000, self.refresh_users_loop)
-
+        # 3. Routing Logic (The Switchboard)
+        if page_name == "Dashboard":
+            from .dashboard_page import DashboardPage
+            self.current_page_obj = DashboardPage(self.content_stage, self.user)
+            
+        elif page_name == "Users":
+            from .users_page import UsersPage
+            self.current_page_obj = UsersPage(self.content_stage, self.user)
+            
+        elif page_name == "Policies":
+            from .policies_page import PoliciesPage
+            self.current_page_obj = PoliciesPage(self.content_stage, self.user)
+            
+        elif page_name == "Claims":
+            from .claims_page import ClaimsPage
+            self.current_page_obj = ClaimsPage(self.content_stage, self.user)
     def logout(self):
-        if self.refresh_id:
-            self.root.after_cancel(self.refresh_id)
         self.root.destroy()
-        # Trigger your login window here...
