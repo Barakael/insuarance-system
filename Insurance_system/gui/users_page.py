@@ -8,143 +8,105 @@ from .base_page import BasePage
 class UsersPage(BasePage):
     def __init__(self, parent, user):
         super().__init__(parent, user)
-        # Using the theme colors defined in MainWindow
-        self.NAVY = "#1a237e"
-        self.SAGE = "#9dc183"
-        self.WHITE = "#ffffff"
-        self.TEXT_DARK = "#1f2937"
-        self.BORDER = "#e5e7eb"
+        self.parent = parent 
+        self.frame = tk.Frame(parent, bg="#ffffff")
+        self.frame.pack(fill="both", expand=True)
+        
+        self.refresh_id = None 
+        self.build_layout() # MUST be named this to satisfy BasePage
+        self.start_auto_refresh()
 
-        self.frame = tk.Frame(parent, bg=self.WHITE)
-        self.frame.pack(fill="both", expand=True, padx=20, pady=20)
-
-        self.build_ui()
-        self.load_users()
-
-    def build_ui(self):
-        # Header Section
-        header_frame = tk.Frame(self.frame, bg=self.WHITE)
-        header_frame.pack(fill="x", pady=(0, 20))
+    def build_layout(self):
+        """Builds the table and the '+ Add User' button"""
+        toolbar = tk.Frame(self.frame, bg="#ffffff", pady=20)
+        toolbar.pack(fill="x", padx=30)
 
         tk.Label(
-            header_frame,
-            text="User Management",
-            font=("Helvetica", 18, "bold"),
-            bg=self.WHITE,
-            fg=self.NAVY  # Adoption of Navy for headers
+            toolbar, text="User Registry", 
+            font=("Helvetica", 18, "bold"), 
+            bg="#ffffff", fg="#1a237e"
         ).pack(side="left")
 
-        # Modern "Add User" Button (Matches sidebar accent)
+        # Live Indicator
+        tk.Label(toolbar, text="● Live Syncing", fg="#9dc183", bg="#ffffff", font=("Helvetica", 9)).pack(side="left", padx=15)
+
+        # Add Button
         add_btn = tk.Button(
-            header_frame,
-            text="+ Add New User",
-            bg=self.SAGE,
-            fg=self.NAVY,
+            toolbar, text="+ Add New User", 
+            bg="#9dc183", fg="#1a237e",
             font=("Helvetica", 10, "bold"),
-            relief="flat",
-            padx=15,
-            pady=8,
-            cursor="hand2",
-            command=self.open_add_user_popup # Trigger the popup
+            relief="flat", padx=15, pady=8,
+            command=self.open_add_user_popup,
+            cursor="hand2"
         )
         add_btn.pack(side="right")
 
-        # ===== STYLED TREEVIEW =====
+        # Table Styling
         style = ttk.Style()
         style.theme_use("clam")
-        style.configure("Treeview", 
-                        background=self.WHITE, 
-                        foreground=self.TEXT_DARK, 
-                        rowheight=35, 
-                        fieldbackground=self.WHITE,
-                        bordercolor=self.BORDER,
-                        borderwidth=1)
-        style.configure("Treeview.Heading", 
-                        background="#f8f9fa", 
-                        foreground=self.NAVY, 
-                        font=("Helvetica", 10, "bold"))
-        style.map("Treeview", background=[('selected', self.SAGE)], foreground=[('selected', self.NAVY)])
+        style.configure("Treeview", foreground="black", background="white", rowheight=35, fieldbackground="white")
+        style.configure("Treeview.Heading", background="#f8f9fa", foreground="#1a237e", font=('Helvetica', 10, 'bold'))
 
         self.tree = ttk.Treeview(self.frame, columns=("ID", "Username", "Role"), show="headings")
         self.tree.heading("ID", text="ID")
-        self.tree.heading("Username", text="USERNAME")
-        self.tree.heading("Role", text="ROLE")
+        self.tree.heading("Username", text="Username")
+        self.tree.heading("Role", text="Role")
         
-        self.tree.column("ID", width=100, anchor="center")
-        self.tree.column("Username", width=300, anchor="w")
-        self.tree.column("Role", width=200, anchor="center")
+        self.tree.pack(fill="both", expand=True, padx=30, pady=10)
 
-        self.tree.pack(fill="both", expand=True)
+    def start_auto_refresh(self):
+        """Updates data every 5 seconds"""
+        self.load_users()
+        # Use root window for the timer to ensure it persists correctly
+        self.refresh_id = self.parent.after(5000, self.start_auto_refresh)
 
     def load_users(self):
-        session = SessionLocal()
+        for row in self.tree.get_children():
+            self.tree.delete(row)
+            
+        db = SessionLocal()
         try:
-            users = session.query(User).all()
-            for row in self.tree.get_children():
-                self.tree.delete(row)
-            for user in users:
-                self.tree.insert("", "end", values=(user.id, user.username, user.role))
+            users = db.query(User).all()
+            for u in users:
+                self.tree.insert("", "end", values=(u.id, u.username, u.role))
         finally:
-            session.close()
+            db.close()
 
-    # ================= POPUP SECTION =================
     def open_add_user_popup(self):
-        # Create a new top-level window (The Popup)
+        """Modal Popup with Focused UI"""
         self.popup = tk.Toplevel(self.frame)
-        self.popup.title("Create New User")
+        self.popup.title("New User")
         self.popup.geometry("400x450")
-        self.popup.configure(bg=self.WHITE)
-        self.popup.resizable(False, False)
-        
-        # Make it modal (Locks the main window)
+        self.popup.configure(bg="white")
         self.popup.transient(self.frame)
-        self.popup.grab_set()
+        self.popup.grab_set() # Lock background
 
-        # Center the popup relative to the main window
-        x = self.frame.winfo_rootx() + (self.frame.winfo_width() // 2) - 200
-        y = self.frame.winfo_rooty() + (self.frame.winfo_height() // 2) - 225
-        self.popup.geometry(f"+{x}+{y}")
+        tk.Label(self.popup, text="Create Account", font=("Helvetica", 14, "bold"), bg="white", fg="#1a237e").pack(pady=20)
 
-        # UI inside Popup
-        tk.Label(self.popup, text="Add New User", font=("Helvetica", 14, "bold"), 
-                 bg=self.WHITE, fg=self.NAVY).pack(pady=20)
+        # Inputs
+        tk.Label(self.popup, text="Username", bg="white", fg="#1a237e").pack(anchor="w", padx=50)
+        self.u_entry = tk.Entry(self.popup, bg="#f4f6f9", relief="flat", font=("Helvetica", 12))
+        self.u_entry.pack(pady=5, padx=50, fill="x")
 
-        # Username Field
-        tk.Label(self.popup, text="Username", bg=self.WHITE, fg=self.NAVY, font=("Helvetica", 10)).pack(anchor="w", padx=50)
-        self.new_username = tk.Entry(self.popup, font=("Helvetica", 12), bg="#f4f6f9", relief="flat")
-        self.new_username.pack(fill="x", padx=50, pady=(5, 15))
+        tk.Label(self.popup, text="Password", bg="white", fg="#1a237e").pack(anchor="w", padx=50, pady=(10,0))
+        self.p_entry = tk.Entry(self.popup, bg="#f4f6f9", relief="flat", font=("Helvetica", 12), show="*")
+        self.p_entry.pack(pady=5, padx=50, fill="x")
 
-        # Password Field
-        tk.Label(self.popup, text="Password", bg=self.WHITE, fg=self.NAVY, font=("Helvetica", 10)).pack(anchor="w", padx=50)
-        self.new_password = tk.Entry(self.popup, font=("Helvetica", 12), bg="#f4f6f9", relief="flat", show="*")
-        self.new_password.pack(fill="x", padx=50, pady=(5, 15))
+        tk.Label(self.popup, text="Role", bg="white", fg="#1a237e").pack(anchor="w", padx=50, pady=(10,0))
+        self.r_combo = ttk.Combobox(self.popup, values=["admin", "staff"], state="readonly")
+        self.r_combo.pack(pady=5, padx=50, fill="x")
 
-        # Role Field
-        tk.Label(self.popup, text="Role", bg=self.WHITE, fg=self.NAVY, font=("Helvetica", 10)).pack(anchor="w", padx=50)
-        self.new_role = ttk.Combobox(self.popup, values=["admin", "staff"], state="readonly")
-        self.new_role.pack(fill="x", padx=50, pady=(5, 30))
+        tk.Button(
+            self.popup, text="CREATE USER", bg="#9dc183", fg="#1a237e",
+            font=("Helvetica", 10, "bold"), command=self.submit_user, relief="flat", pady=12
+        ).pack(pady=30, padx=50, fill="x")
 
-        # Action Buttons
-        save_btn = tk.Button(self.popup, text="Create User", bg=self.SAGE, fg=self.NAVY, 
-                             font=("Helvetica", 11, "bold"), relief="flat", pady=10,
-                             command=self.submit_new_user)
-        save_btn.pack(fill="x", padx=50)
-
-    def submit_new_user(self):
-        username = self.new_username.get()
-        password = self.new_password.get()
-        role = self.new_role.get()
-
-        if not username or not password or not role:
-            messagebox.showerror("Error", "All fields are required")
-            return
-
-        try:
+    def submit_user(self):
+        u = self.u_entry.get()
+        p = self.p_entry.get()
+        r = self.r_combo.get()
+        if u and p and r:
             service = UserService()
-            # Ensure your UserService has a create_user method
-            service.create_user(username, password, role)
-            messagebox.showinfo("Success", f"User {username} created!")
-            self.popup.destroy() # Close popup
-            self.load_users()    # Refresh table
-        except Exception as e:
-            messagebox.showerror("Database Error", str(e))
+            service.create_user(u, p, r)
+            self.popup.destroy()
+            self.load_users()
