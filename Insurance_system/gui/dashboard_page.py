@@ -1,30 +1,57 @@
 import tkinter as tk
-from .base_page import BasePage  # Essential Import
+from .base_page import BasePage
+from services.dashboard_service import DashboardService
 
 class DashboardPage(BasePage):
     def __init__(self, parent, user):
         super().__init__(parent, user)
-        self.frame = tk.Frame(parent, bg="#ffffff")
+        self.service = DashboardService()
+        self.NAVY = "#1a237e"
+        
+        self.frame = tk.Frame(parent, bg="#f4f6f9")
         self.frame.pack(fill="both", expand=True)
-        self.build_layout()
+        
+        # This triggers the abstract method implementation
+        self.build_layout() 
+        self.refresh_data()
 
-    def build_layout(self):
+    def build_layout(self):  # CHANGED FROM setup_ui
         # Header
-        tk.Label(self.frame, text="System Overview", font=("Helvetica", 20, "bold"), 
-                 bg="#ffffff", fg="#1a237e").pack(anchor="w", padx=40, pady=30)
+        header = tk.Frame(self.frame, bg="#f4f6f9", pady=20)
+        header.pack(fill="x", padx=30)
+        tk.Label(header, text=f"System Overview", 
+                 font=("Helvetica", 18, "bold"), bg="#f4f6f9", fg=self.NAVY).pack(side="left")
 
-        # Stats Grid
-        stats_container = tk.Frame(self.frame, bg="#ffffff")
-        stats_container.pack(fill="x", padx=40)
+        # Stats Container
+        self.stats_frame = tk.Frame(self.frame, bg="#f4f6f9")
+        self.stats_frame.pack(fill="x", padx=30, pady=20)
 
-        self.create_stat_card(stats_container, "Active Policies", "1,284", "#1a237e", 0)
-        self.create_stat_card(stats_container, "Pending Claims", "42", "#9dc183", 1)
-        self.create_stat_card(stats_container, "Total Premiums", "$4.2M", "#1a237e", 2)
+        # Create Stat Cards
+        self.policy_card = self.create_stat_card("Total Policies", "0", 0)
+        self.claim_card = self.create_stat_card("Active Claims", "0", 1)
+        self.revenue_card = self.create_stat_card("Total Revenue", "$0.00", 2)
+        self.payout_card = self.create_stat_card("Total Payouts", "$0.00", 3)
 
-    def create_stat_card(self, parent, title, value, color, col):
-        card = tk.Frame(parent, bg="#f8f9fa", highlightthickness=1, highlightbackground="#e5e7eb", padx=20, pady=20)
+    def create_stat_card(self, title, value, col):
+        card = tk.Frame(self.stats_frame, bg="white", padx=20, pady=20, 
+                        highlightthickness=1, highlightbackground="#e0e0e0")
         card.grid(row=0, column=col, padx=10, sticky="nsew")
-        parent.columnconfigure(col, weight=1)
+        self.stats_frame.columnconfigure(col, weight=1)
 
-        tk.Label(card, text=title, font=("Helvetica", 10), bg="#f8f9fa", fg="#6b7280").pack(anchor="w")
-        tk.Label(card, text=value, font=("Helvetica", 18, "bold"), bg="#f8f9fa", fg=color).pack(anchor="w", pady=(5, 0))
+        tk.Label(card, text=title, font=("Helvetica", 10), bg="white", fg="#757575").pack()
+        val_label = tk.Label(card, text=value, font=("Helvetica", 16, "bold"), bg="white", fg=self.NAVY)
+        val_label.pack(pady=5)
+        return val_label
+
+    def refresh_data(self):
+        try:
+            data = self.service.get_stats()
+            self.policy_card.config(text=data["policies"])
+            self.claim_card.config(text=data["claims"])
+            self.revenue_card.config(text=data["revenue"])
+            self.payout_card.config(text=data["payouts"])
+        except Exception as e:
+            print(f"Dashboard refresh error: {e}")
+
+        # Refresh every 30 seconds
+        self.frame.after(30000, self.refresh_data)
