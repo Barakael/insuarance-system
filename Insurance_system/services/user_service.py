@@ -25,3 +25,18 @@ class UserService:
         if self.db:
             self.db.close()
             print("Database session closed.")
+
+    def create_user(self, username, password, role):
+        db = SessionLocal()
+        try:
+            new_user = User(username=username, password=password, role=role)
+            db.add(new_user)
+            db.commit()
+            print(f"User {username} added to database.")
+            return True
+        except Exception as e:
+            print(f"Error creating user: {e}")
+            db.rollback()
+            return False
+        finally:
+            db.close()
