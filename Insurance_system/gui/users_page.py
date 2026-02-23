@@ -9,58 +9,73 @@ class UsersPage(BasePage):
     def __init__(self, parent, user):
         super().__init__(parent, user)
         self.parent = parent 
-        self.frame = tk.Frame(parent, bg="#ffffff")
+        self.user_service = UserService() # Encapsulated service
+        
+        # Color Palette
+        self.NAVY = "#1a237e"
+        self.SAGE = "#9dc183"
+        self.BG_LIGHT = "#ffffff"
+        self.INPUT_BG = "#f4f6f9"
+        
+        self.frame = tk.Frame(parent, bg=self.BG_LIGHT)
         self.frame.pack(fill="both", expand=True)
         
-        self.refresh_id = None 
-        self.build_layout() # MUST be named this to satisfy BasePage
+        self.build_layout()
         self.start_auto_refresh()
 
     def build_layout(self):
-        """Builds the table and the '+ Add User' button"""
-        toolbar = tk.Frame(self.frame, bg="#ffffff", pady=20)
+        """Implements the abstract method from BasePage"""
+        # --- Toolbar ---
+        toolbar = tk.Frame(self.frame, bg=self.BG_LIGHT, pady=20)
         toolbar.pack(fill="x", padx=30)
 
         tk.Label(
             toolbar, text="User Registry", 
             font=("Helvetica", 18, "bold"), 
-            bg="#ffffff", fg="#1a237e"
+            bg=self.BG_LIGHT, fg=self.NAVY
         ).pack(side="left")
 
-        # Live Indicator
-        tk.Label(toolbar, text="● Live Syncing", fg="#9dc183", bg="#ffffff", font=("Helvetica", 9)).pack(side="left", padx=15)
+        # Action Buttons Container
+        btn_frame = tk.Frame(toolbar, bg=self.BG_LIGHT)
+        btn_frame.pack(side="right")
 
-        # Add Button
-        add_btn = tk.Button(
-            toolbar, text="+ Add New User", 
-            bg="#9dc183", fg="#1a237e",
+        tk.Button(
+            btn_frame, text="+ Add New User", 
+            bg=self.SAGE, fg=self.NAVY,
             font=("Helvetica", 10, "bold"),
             relief="flat", padx=15, pady=8,
             command=self.open_add_user_popup,
             cursor="hand2"
-        )
-        add_btn.pack(side="right")
+        ).pack(side="right")
 
-        # Table Styling
+        # --- Table Styling ---
         style = ttk.Style()
         style.theme_use("clam")
-        style.configure("Treeview", foreground="black", background="white", rowheight=35, fieldbackground="white")
-        style.configure("Treeview.Heading", background="#f8f9fa", foreground="#1a237e", font=('Helvetica', 10, 'bold'))
+        style.configure("Treeview", 
+                        foreground="black", 
+                        background="white", 
+                        rowheight=35, 
+                        fieldbackground="white")
+        style.configure("Treeview.Heading", 
+                        background="#f8f9fa", 
+                        foreground=self.NAVY, 
+                        font=('Helvetica', 10, 'bold'))
 
-        self.tree = ttk.Treeview(self.frame, columns=("ID", "Username", "Role"), show="headings")
-        self.tree.heading("ID", text="ID")
-        self.tree.heading("Username", text="Username")
-        self.tree.heading("Role", text="Role")
+        # --- Table Implementation ---
+        columns = ("ID", "Username", "Role")
+        self.tree = ttk.Treeview(self.frame, columns=columns, show="headings")
+        for col in columns:
+            self.tree.heading(col, text=col)
+            self.tree.column(col, anchor="center")
         
         self.tree.pack(fill="both", expand=True, padx=30, pady=10)
 
-    def start_auto_refresh(self):
-        """Updates data every 5 seconds"""
-        self.load_users()
-        # Use root window for the timer to ensure it persists correctly
-        self.refresh_id = self.parent.after(5000, self.start_auto_refresh)
-
     def load_users(self):
+        """Fetches fresh data from DB"""
+        # Check if widget still exists to prevent TclError
+        if not self.tree.winfo_exists():
+            return
+
         for row in self.tree.get_children():
             self.tree.delete(row)
             
@@ -72,41 +87,76 @@ class UsersPage(BasePage):
         finally:
             db.close()
 
+    def start_auto_refresh(self):
+        """Background loop for live syncing"""
+        if self.frame.winfo_exists():
+            self.load_users()
+            # Save the after_id so we could cancel it if needed
+            self.frame.after(5000, self.start_auto_refresh)
+
     def open_add_user_popup(self):
-        """Modal Popup with Focused UI"""
-        self.popup = tk.Toplevel(self.frame)
-        self.popup.title("New User")
-        self.popup.geometry("400x450")
-        self.popup.configure(bg="white")
-        self.popup.transient(self.frame)
-        self.popup.grab_set() # Lock background
+        """Modal Popup with fixed text visibility for macOS"""
+        popup = tk.Toplevel(self.frame)
+        popup.title("New User Account")
+        popup.geometry("400x480")
+        popup.configure(bg="white")
+        popup.transient(self.frame) # Keeps popup on top of main window
+        popup.grab_set()           # Prevents interaction with main window
 
-        tk.Label(self.popup, text="Create Account", font=("Helvetica", 14, "bold"), bg="white", fg="#1a237e").pack(pady=20)
+        tk.Label(
+            popup, text="Create Account", 
+            font=("Helvetica", 14, "bold"), 
+            bg="white", fg=self.NAVY
+        ).pack(pady=20)
 
-        # Inputs
-        tk.Label(self.popup, text="Username", bg="white", fg="#1a237e").pack(anchor="w", padx=50)
-        self.u_entry = tk.Entry(self.popup, bg="#f4f6f9", relief="flat", font=("Helvetica", 12))
-        self.u_entry.pack(pady=5, padx=50, fill="x")
+        # Reusable helper for visible inputs
+        def create_input(label_text, is_password=False):
+            tk.Label(popup, text=label_text, bg="white", fg="black", 
+                     font=("Helvetica", 10, "bold")).pack(anchor="w", padx=50)
+            
+            entry = tk.Entry(
+                popup, 
+                bg=self.INPUT_BG, 
+                fg="black",               # Force black text
+                insertbackground="black",  # Force black cursor
+                relief="flat", 
+                font=("Helvetica", 12),
+                show="*" if is_password else ""
+            )
+            entry.pack(pady=(5, 15), padx=50, fill="x", ipady=5)
+            return entry
 
-        tk.Label(self.popup, text="Password", bg="white", fg="#1a237e").pack(anchor="w", padx=50, pady=(10,0))
-        self.p_entry = tk.Entry(self.popup, bg="#f4f6f9", relief="flat", font=("Helvetica", 12), show="*")
-        self.p_entry.pack(pady=5, padx=50, fill="x")
+        u_entry = create_input("Username")
+        p_entry = create_input("Password", is_password=True)
 
-        tk.Label(self.popup, text="Role", bg="white", fg="#1a237e").pack(anchor="w", padx=50, pady=(10,0))
-        self.r_combo = ttk.Combobox(self.popup, values=["admin", "staff"], state="readonly")
-        self.r_combo.pack(pady=5, padx=50, fill="x")
+        tk.Label(popup, text="Role Selection", bg="white", fg="black", 
+                 font=("Helvetica", 10, "bold")).pack(anchor="w", padx=50)
+        
+        r_combo = ttk.Combobox(popup, values=["admin", "staff"], state="readonly")
+        r_combo.pack(pady=5, padx=50, fill="x")
+        r_combo.set("staff")
+
+        def handle_submit():
+            username = u_entry.get().strip()
+            password = p_entry.get().strip()
+            role = r_combo.get()
+
+            if not username or not password:
+                messagebox.showwarning("Input Error", "Please fill in all fields.")
+                return
+
+            if self.user_service.create_user(username, password, role):
+                popup.destroy()
+                self.load_users()
+                messagebox.showinfo("Success", f"User '{username}' created.")
+            else:
+                messagebox.showerror("Error", "Username already exists or database error.")
 
         tk.Button(
-            self.popup, text="CREATE USER", bg="#9dc183", fg="#1a237e",
-            font=("Helvetica", 10, "bold"), command=self.submit_user, relief="flat", pady=12
+            popup, text="CREATE USER", 
+            bg=self.SAGE, fg=self.NAVY,
+            font=("Helvetica", 10, "bold"), 
+            command=handle_submit, 
+            relief="flat", pady=12,
+            cursor="hand2"
         ).pack(pady=30, padx=50, fill="x")
-
-    def submit_user(self):
-        u = self.u_entry.get()
-        p = self.p_entry.get()
-        r = self.r_combo.get()
-        if u and p and r:
-            service = UserService()
-            service.create_user(u, p, r)
-            self.popup.destroy()
-            self.load_users()
